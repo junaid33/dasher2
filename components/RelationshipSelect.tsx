@@ -132,7 +132,6 @@ export function RelationshipSelect({
       : [list.labelField]
     
     // Log search fields for debugging
-    console.log('Using search fields:', fieldsToSearch);
     
     try {
       // Create conditions for each search field

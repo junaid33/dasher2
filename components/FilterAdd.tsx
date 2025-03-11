@@ -124,13 +124,7 @@ function FilterAddContent({
       
       newSearchParams.set(filterKey, JSON.stringify(state.filterValue));
       newSearchParams.set('page', '1'); // Reset to first page when adding a filter
-      
-      // Log the filter being added
-      console.log('Adding filter:', {
-        key: filterKey,
-        value: state.filterValue,
-        graphqlValue
-      });
+
       
       router.push(`${pathname}?${newSearchParams.toString()}`);
       onClose();
