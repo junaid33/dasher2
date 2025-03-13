@@ -3,9 +3,11 @@ import { buildFilters } from "./utils/filters"
 import { getSort } from "./utils/sort"
 import { getSelectedFields } from "./utils/fields"
 import { getFieldTypeFromViewsIndex, getServerField } from "../views/registry"
+import { getAdminMeta } from "./hooks/getAdminMeta"
+import { Field, List } from "./hooks/types"
 
 // Helper function to get GraphQL selections for fields
-function generateGraphQLSelections(fields) {
+function generateGraphQLSelections(fields: Record<string, Field>): string {
   // Always include id
   const selections = ["id"]
 
@@ -25,7 +27,7 @@ function generateGraphQLSelections(fields) {
 }
 
 // Utility function to fetch data from GraphQL API directly
-export async function fetchGraphQL(query, variables = {}) {
+export async function fetchGraphQL(query: string, variables: Record<string, any> = {}) {
   try {
     // Use the exact endpoint URL
     const endpoint = "http://localhost:3000/api/graphql"
@@ -62,140 +64,40 @@ export async function fetchGraphQL(query, variables = {}) {
 /**
  * Fetches the complete admin metadata from Keystone
  * This is equivalent to what useKeystone() provides in the client
+ * 
+ * @deprecated Use getAdminMeta from lib/hooks/getAdminMeta instead
  */
 export async function getKeystoneAdminMeta() {
-  const query = `
-    query {
-      keystone {
-        adminMeta {
-          lists {
-            key
-            path
-            label
-            singular
-            plural
-            description
-            initialColumns
-            pageSize
-            labelField
-            fields {
-              path
-              label
-              isOrderable
-              isFilterable
-              fieldMeta
-              viewsIndex
-              customViewsIndex
-              listView {
-                fieldMode
-              }
-            }
-          }
-        }
-      }
-    }
-  `
-
-  const data = await fetchGraphQL(query)
-
-  // Transform the data to match the structure expected by the components
-  const adminMeta = {
-    lists: {},
-  }
-
-  // Process the lists into a map keyed by list key
-  data.keystone.adminMeta.lists.forEach((list) => {
-    // Process fields into a map keyed by field path
-    const fields = {}
-    list.fields.forEach((field) => {
-      fields[field.path] = field
-    })
-
-    // Generate the GraphQL names using the exact same logic as in getNamesFromList.js
-    const gqlNames = getGqlNames({
-      listKey: list.key,
-      pluralGraphQLName: list.plural,
-    })
-
-    // Get searchable fields (fields that are filterable)
-    const searchFields = list.fields
-      .filter(field => field.isFilterable)
-      .map(field => field.path);
-
-    // Store the processed list with the correct gqlNames
-    adminMeta.lists[list.key] = {
-      ...list,
-      fields,
-      gqlNames,
-      searchFields,
-    }
-  })
-
-  return adminMeta
+  return getAdminMeta();
 }
 
 /**
  * Fetches the complete admin metadata from Keystone with itemView field
  * This is a specialized version that includes the itemView field needed by the admin UI
+ * 
+ * @deprecated Use getAdminMeta from lib/hooks/getAdminMeta instead
  */
 export async function getKeystoneAdminMetaWithItemView() {
-  const query = `
-    query {
-      keystone {
-        adminMeta {
-          lists {
-            key
-            path
-            label
-            singular
-            plural
-            description
-            initialColumns
-            pageSize
-            labelField
-            fields {
-              path
-              label
-              isOrderable
-              isFilterable
-              fieldMeta
-              viewsIndex
-              customViewsIndex
-              itemView {
-                fieldMode
-                fieldPosition
-              }
-            }
-          }
-        }
-      }
-    }
-  `
-
-  const data = await fetchGraphQL(query)
-  return data;
+  return getAdminMeta();
 }
 
 /**
  * Gets a specific list's metadata from the admin metadata
  * This is equivalent to what useList(listKey) does in the client
+ * 
+ * @deprecated Use getList from lib/hooks/getAdminMeta instead
  */
-export async function getList(listKey) {
-  const adminMeta = await getKeystoneAdminMeta()
-
-  if (!adminMeta.lists[listKey]) {
-    throw new Error(`List not found: ${listKey}`)
-  }
-
-  return adminMeta.lists[listKey]
+export async function getList(listKey: string) {
+  const adminMeta = await getAdminMeta()
+  return adminMeta.lists[listKey];
 }
 
 /**
  * Gets the filters from search params
  * This is equivalent to what useFilters() does in the client
  */
-export function getFilters(list, searchParams) {
-  const filters = {};
+export function getFilters(list: List, searchParams: Record<string, any>) {
+  const filters: Record<string, any> = {};
 
   // Handle search parameter
   if (searchParams?.search) {
@@ -251,7 +153,7 @@ export function getFilters(list, searchParams) {
  * Fetches the list data with filtering, sorting, and pagination
  * This is equivalent to the GraphQL query in the ListPage component
  */
-export async function getListData(list, searchParams) {
+export async function getListData(list: List, searchParams: Record<string, any> | URLSearchParams) {
   try {
     // Convert searchParams to a regular object if it's not already
     const searchParamsObj = searchParams instanceof URLSearchParams
@@ -275,8 +177,8 @@ export async function getListData(list, searchParams) {
     const filters = getFilters(list, searchParamsObj);
 
     // Filter the fields object to only include selected fields
-    const selectedFieldsObj = {};
-    selectedFieldPaths.forEach((fieldPath) => {
+    const selectedFieldsObj: Record<string, Field> = {};
+    selectedFieldPaths.forEach((fieldPath: string) => {
       if (list.fields[fieldPath]) {
         selectedFieldsObj[fieldPath] = list.fields[fieldPath];
       }
@@ -324,7 +226,7 @@ export async function getListData(list, searchParams) {
 /**
  * Fetches a single item by ID
  */
-export async function getItem(list, id, searchParams = {}) {
+export async function getItem(list: List, id: string, searchParams: Record<string, any> = {}) {
   try {
     // Use the exact itemQueryName from the list
     const { itemQueryName } = list.gqlNames
@@ -362,14 +264,14 @@ export async function getItem(list, id, searchParams = {}) {
 /**
  * Creates a new item
  */
-export async function createItem(list, data) {
+export async function createItem(list: List, data: Record<string, any>) {
   try {
     const { createMutationName } = list.gqlNames
 
     // Get all fields that can be created
     const createableFields = Object.entries(list.fields)
       .filter(([_, field]) => field.createView?.fieldMode !== "hidden")
-      .reduce((acc, [path, field]) => {
+      .reduce((acc: Record<string, Field>, [path, field]) => {
         acc[path] = field
         return acc
       }, {})
@@ -403,14 +305,14 @@ export async function createItem(list, data) {
 /**
  * Updates an existing item
  */
-export async function updateItem(list, id, data) {
+export async function updateItem(list: List, id: string, data: Record<string, any>) {
   try {
     const { updateMutationName } = list.gqlNames
 
     // Get all fields that can be updated
     const updateableFields = Object.entries(list.fields)
       .filter(([_, field]) => field.itemView?.fieldMode === "edit")
-      .reduce((acc, [path, field]) => {
+      .reduce((acc: Record<string, Field>, [path, field]) => {
         acc[path] = field
         return acc
       }, {})
@@ -444,7 +346,7 @@ export async function updateItem(list, id, data) {
 /**
  * Deletes an item
  */
-export async function deleteItem(list, id) {
+export async function deleteItem(list: List, id: string) {
   try {
     const { deleteMutationName } = list.gqlNames
 

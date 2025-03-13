@@ -4,6 +4,7 @@
 import { fetchGraphQL } from "@/lib/graphql";
 import { getGqlNames } from "@/lib/get-names-from-list";
 
+// Export types used by both client and server components
 export interface Option {
   value: string;
   label: string;
@@ -45,6 +46,7 @@ export interface FieldProps {
   }) => void;
 }
 
+// Export utility functions for GraphQL operations
 export function getGraphQLSelection(path: string, fieldMeta: FieldMeta) {
   if (fieldMeta?.many) {
     return `

@@ -43,7 +43,8 @@ function CustomMultiSelector({
   );
 }
 
-export default function ClientField({
+// Export the component with a named export for better discoverability
+export function ClientField({
   options,
   selectedOptions,
   searchFields,

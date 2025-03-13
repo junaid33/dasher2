@@ -16,18 +16,18 @@ import Link from "next/link"
 
 // Define types for the component props
 export interface ListMeta {
-  key?: string;
-  path?: string;
-  label?: string;
-  singular?: string;
-  plural?: string;
-  initialColumns?: string[];
+  key: string;
+  path: string;
+  label: string;
+  singular: string;
+  plural: string;
+  initialColumns: string[];
   fields: Record<string, {
     path: string;
     label: string;
     isFilterable: boolean;
     isOrderable: boolean;
-    viewsIndex?: string;
+    viewsIndex: number;
   }>;
 }
 

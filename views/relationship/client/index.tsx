@@ -4,13 +4,14 @@
 import { FieldProps, FieldMeta, RelationshipItem, Option } from "../server";
 import type { Field } from "../server";
 import { Label } from "@/components/ui/label";
-import ClientField from "./Field";
+import { ClientField } from "./Field";
 import { MultipleSelector } from "@/components/ui/multi-select";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useState, useEffect, Suspense } from "react";
 import useSWR from "swr";
 import { fetchGraphQL } from "@/lib/graphql";
 import { getGqlNames } from "@/lib/get-names-from-list";
+import { useAdminMeta, useList } from "@/lib/hooks/useAdminMeta";
 
 /**
  * SWR Suspense Mode Notes:
@@ -122,60 +123,6 @@ function ClientSelectedOptionLabel({
   return <>{data || id}</>;
 }
 
-// Fetcher function for SWR - converted to use promises instead of async/await
-const fetchRelationshipData = (field: Field) => {
-  const { refListKey, refLabelField = "id" } = field.fieldMeta;
-
-  const listMetaQuery = `
-    query {
-      keystone {
-        adminMeta {
-          list(key: "${refListKey}") {
-            singular
-            plural
-            labelField
-            fields {
-              path
-              isFilterable
-            }
-          }
-        }
-      }
-    }
-  `;
-  
-  return fetchGraphQL(listMetaQuery)
-    .then(metaData => {
-      const listMeta = metaData.keystone.adminMeta.list || {};
-      const gqlNames = getGqlNames({
-        listKey: refListKey,
-        pluralGraphQLName: listMeta.plural || refListKey.toLowerCase() + "s",
-      });
-
-      // Fetch only IDs to avoid resolver issues with refLabelField
-      const optionsQuery = `
-        query {
-          items: ${gqlNames.listQueryName}(take: 100) {
-            ${refLabelField === "id" ? "id" : `id\n        ${refLabelField}`}
-          }
-        }
-      `;
-
-      return fetchGraphQL(optionsQuery).then(optionsData => {
-        return {
-          options: (optionsData?.items || []).map((item: any) => ({
-            value: item.id,
-            label: item[refLabelField] || item.id || "Unknown",
-          })),
-          searchFields: (listMeta.fields || [])
-            .filter((f: any) => f.isFilterable)
-            .map((f: any) => f.path),
-          plural: listMeta.plural || refListKey.toLowerCase() + "s",
-        };
-      });
-    });
-};
-
 // Regular version without suspense
 export function Field({ field, value, rawValue, kind = 'update', onChange }: ExtendedFieldProps) {
   const { refListKey, refLabelField = "id", many = false } = field.fieldMeta;
@@ -210,17 +157,52 @@ export function Field({ field, value, rawValue, kind = 'update', onChange }: Ext
         }]
     : [];
 
-  // Use SWR to fetch relationship data, but don't block rendering
+  // Use our admin meta hook to get the referenced list
+  const { adminMeta } = useAdminMeta();
+  const refList = adminMeta?.lists?.[refListKey];
+  
+  // Fetch relationship options
   const { data } = useSWR(
-    [`relationshipData-${field.path}`, field],
-    () => fetchRelationshipData(field),
+    [`relationshipOptions-${refListKey}`, refListKey, refLabelField],
+    async () => {
+      // If we already have the list metadata from our admin meta hook, use it
+      if (refList) {
+        const gqlNames = refList.gqlNames || getGqlNames({
+          listKey: refListKey,
+          pluralGraphQLName: refList.plural,
+        });
+
+        // Fetch only IDs to avoid resolver issues with refLabelField
+        const optionsQuery = `
+          query {
+            items: ${gqlNames.listQueryName}(take: 100) {
+              ${refLabelField === "id" ? "id" : `id\n              ${refLabelField}`}
+            }
+          }
+        `;
+
+        const optionsData = await fetchGraphQL(optionsQuery);
+        
+        return {
+          options: (optionsData?.items || []).map((item: any) => ({
+            value: item.id,
+            label: item[refLabelField] || item.id || "Unknown",
+          })),
+          searchFields: refList.searchFields || [],
+          plural: refList.plural || refListKey.toLowerCase() + "s",
+        };
+      }
+      
+      // Fallback to the old implementation if admin meta is not available
+      return fetchRelationshipData(field);
+    },
     { 
       revalidateOnFocus: false,
       // Provide fallback empty data to avoid loading states
       fallbackData: {
         options: [],
         searchFields: [],
-        plural: field.fieldMeta.plural || field.fieldMeta.refListKey.toLowerCase() + "s"
+        plural: refList?.plural || field.fieldMeta.refListKey.toLowerCase() + "s"
       }
     }
   );
@@ -228,7 +210,6 @@ export function Field({ field, value, rawValue, kind = 'update', onChange }: Ext
   return (
     <div className="grid gap-2">
       <Label>{field.label}</Label>
-      {JSON.stringify(processedValue)}
       <ClientField
         options={data?.options || []}
         selectedOptions={selectedOptions}
@@ -283,10 +264,45 @@ export function FieldWithSuspense({ field, value, rawValue, kind = 'update', onC
         }]
     : [];
 
+  // Use our admin meta hook to get the referenced list
+  const { adminMeta } = useAdminMeta();
+  const refList = adminMeta?.lists?.[refListKey];
+  
   // Use SWR with suspense mode enabled
   const { data } = useSWR(
-    [`relationshipData-${field.path}`, field],
-    () => fetchRelationshipData(field),
+    [`relationshipOptions-${refListKey}`, refListKey, refLabelField],
+    async () => {
+      // If we already have the list metadata from our admin meta hook, use it
+      if (refList) {
+        const gqlNames = refList.gqlNames || getGqlNames({
+          listKey: refListKey,
+          pluralGraphQLName: refList.plural,
+        });
+
+        // Fetch only IDs to avoid resolver issues with refLabelField
+        const optionsQuery = `
+          query {
+            items: ${gqlNames.listQueryName}(take: 100) {
+              ${refLabelField === "id" ? "id" : `id\n              ${refLabelField}`}
+            }
+          }
+        `;
+
+        const optionsData = await fetchGraphQL(optionsQuery);
+        
+        return {
+          options: (optionsData?.items || []).map((item: any) => ({
+            value: item.id,
+            label: item[refLabelField] || item.id || "Unknown",
+          })),
+          searchFields: refList.searchFields || [],
+          plural: refList.plural || refListKey.toLowerCase() + "s",
+        };
+      }
+      
+      // Fallback to the old implementation if admin meta is not available
+      return fetchRelationshipData(field);
+    },
     { 
       suspense: true, // Enable suspense mode
       revalidateOnFocus: false
@@ -489,4 +505,58 @@ export const controller = (config: any) => {
       return { [config.path]: null };
     },
   };
+};
+
+// Keep the original fetcher function for backward compatibility
+const fetchRelationshipData = (field: Field) => {
+  const { refListKey, refLabelField = "id" } = field.fieldMeta;
+
+  const listMetaQuery = `
+    query {
+      keystone {
+        adminMeta {
+          list(key: "${refListKey}") {
+            singular
+            plural
+            labelField
+            fields {
+              path
+              isFilterable
+            }
+          }
+        }
+      }
+    }
+  `;
+  
+  return fetchGraphQL(listMetaQuery)
+    .then(metaData => {
+      const listMeta = metaData.keystone.adminMeta.list || {};
+      const gqlNames = getGqlNames({
+        listKey: refListKey,
+        pluralGraphQLName: listMeta.plural || refListKey.toLowerCase() + "s",
+      });
+
+      // Fetch only IDs to avoid resolver issues with refLabelField
+      const optionsQuery = `
+        query {
+          items: ${gqlNames.listQueryName}(take: 100) {
+            ${refLabelField === "id" ? "id" : `id\n        ${refLabelField}`}
+          }
+        }
+      `;
+
+      return fetchGraphQL(optionsQuery).then(optionsData => {
+        return {
+          options: (optionsData?.items || []).map((item: any) => ({
+            value: item.id,
+            label: item[refLabelField] || item.id || "Unknown",
+          })),
+          searchFields: (listMeta.fields || [])
+            .filter((f: any) => f.isFilterable)
+            .map((f: any) => f.path),
+          plural: listMeta.plural || refListKey.toLowerCase() + "s",
+        };
+      });
+    });
 };

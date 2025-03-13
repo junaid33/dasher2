@@ -1,27 +1,14 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { fetchGraphQL } from "@/lib/graphql"
+import { getAdminMeta } from "@/lib/hooks/getAdminMeta"
 
 export default async function Home() {
-  // Fetch lists from the GraphQL API
-  const data = await fetchGraphQL(`
-    query {
-      keystone {
-        adminMeta {
-          lists {
-            key
-            path
-            label
-            singular
-            plural
-          }
-        }
-      }
-    }
-  `)
-
-  const lists = data.keystone.adminMeta.lists
+  // Use our cached admin metadata function
+  const adminMeta = await getAdminMeta();
+  
+  // Get all lists as an array
+  const lists = Object.values(adminMeta.lists);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -29,7 +16,7 @@ export default async function Home() {
         <h1 className="text-2xl font-bold tracking-tight mb-6">Admin Dashboard</h1>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {lists.map((list: any) => (
+          {lists.map((list) => (
             <Card key={list.key}>
               <CardHeader>
                 <CardTitle>{list.label}</CardTitle>
