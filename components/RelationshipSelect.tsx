@@ -10,6 +10,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { MultipleSelector } from "@/components/ui/multi-select"
 import { Loader2 } from "lucide-react"
 import { getGqlNames } from '@/lib/get-names-from-list'
+import { fetchGraphQL } from '@/lib/graphql'
 
 // Debounce helper
 function useDebounce(value: any, delay: number) {
@@ -26,32 +27,6 @@ function useDebounce(value: any, delay: number) {
   }, [value, delay])
 
   return debouncedValue
-}
-
-async function fetchGraphQL(query: string, variables = {}) {
-  const response = await fetch('http://localhost:3000/api/graphql', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': 'cm7pag5lk002s6lq83d747l2j',
-    },
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
-  })
-
-  if (!response.ok) {
-    throw new Error(`GraphQL request failed: ${response.statusText}`)
-  }
-
-  const json = await response.json()
-
-  if (json.errors?.length) {
-    throw new Error(json.errors[0].message)
-  }
-
-  return json.data
 }
 
 // ID validators from original component
@@ -161,16 +136,6 @@ export function RelationshipSelect({
     try {
       const where = buildWhere(searchTerm)
       
-      // Log complete query information for debugging
-      console.log('Search term:', searchTerm);
-      console.log('Where clause:', where);
-      console.log('List info:', {
-        key: list.key,
-        plural: list.plural,
-        labelField: list.labelField,
-        searchFields: list.searchFields
-      });
-      console.log('GQL Names:', gqlNames);
       
       // Make sure we're selecting the label field
       const query = `
@@ -190,18 +155,11 @@ export function RelationshipSelect({
         skip: (loadPage - 1) * pageSize
       }
       
-      // Log the complete query and variables
-      console.log('GraphQL Query:', query);
-      console.log('Variables:', variables);
-
+      // Use fetchGraphQL from graphql.ts instead of making a direct API call
       const data = await fetchGraphQL(query, variables)
       
       // Log successful response
-      console.log('GraphQL Response:', data);
-      console.log('Items with labels:', data.items.map((item: any) => ({ 
-        id: item.id, 
-        label: item[list.labelField] 
-      })));
+
 
       const newOptions = data.items.map((item: any) => {
         // Get a proper label - ensure it's a non-empty string
@@ -247,7 +205,6 @@ export function RelationshipSelect({
         }
       } else if (searchTerm) {
         // For other errors, try a simpler query without search
-        console.log('Attempting fallback query with no search filters...');
         try {
           return await loadOptions('', loadPage, append);
         } catch (fallbackError) {
@@ -317,26 +274,7 @@ export function RelationshipSelect({
         })()
       : []
 
-  // Log the value to debug
-  console.log('Selected value:', state.value);
-  if (state.value) {
-    if (Array.isArray(state.value)) {
-      console.log('Selected value properties:', state.value.map(v => Object.keys(v)));
-      console.log('Selected value label field:', state.value.map(v => ({ 
-        id: v.id, 
-        label: v.label, 
-        labelField: v[list.labelField] 
-      })));
-    } else if (state.value && typeof state.value === 'object') {
-      console.log('Selected value properties:', Object.keys(state.value));
-      console.log('Selected value label field:', { 
-        id: state.value.id, 
-        label: state.value.label, 
-        labelField: state.value[list.labelField] 
-      });
-    }
-  }
-  console.log('Formatted value for MultipleSelector:', value);
+
 
   return (
     <div className="space-y-4">

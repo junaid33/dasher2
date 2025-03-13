@@ -6,15 +6,26 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { format, parse, isValid } from "date-fns"
+import { Calendar } from "@/components/ui/calendar"
+import { ClockIcon, CalendarIcon } from "lucide-react"
+import { useState, useEffect } from "react"
+import { 
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 
 const DATE_FORMAT = "yyyy-MM-dd"
 const TIME_FORMAT = "HH:mm:ss"
 const DATETIME_FORMAT = `${DATE_FORMAT} ${TIME_FORMAT}`
+const DISPLAY_FORMAT = "MMMM do yyyy 'at' h:mma"
 
 interface Field {
   path: string
   label: string
   description?: string
+  fieldMeta?: any
 }
 
 interface FilterProps {
@@ -30,6 +41,8 @@ interface CellProps {
 interface FieldProps {
   field: Field
   value?: { value: string | null; initial?: string | null; kind: 'update' | 'create' }
+  rawValue?: any
+  kind?: 'create' | 'update'
   onChange?: (value: { value: string | null; initial?: string | null; kind: 'update' | 'create' }) => void
 }
 
@@ -64,6 +77,15 @@ function formatDate(date: string | null): string {
   return format(new Date(date), DATETIME_FORMAT)
 }
 
+function formatDateForDisplay(date: string | null | undefined): string {
+  if (!date) return "Select date and time"
+  try {
+    return format(new Date(date), DISPLAY_FORMAT)
+  } catch (e) {
+    return "Select date and time"
+  }
+}
+
 function parseDateTime(dateStr: string, timeStr: string): string | null {
   if (!dateStr) return null
 
@@ -73,45 +95,133 @@ function parseDateTime(dateStr: string, timeStr: string): string | null {
   return isValid(parsed) ? parsed.toISOString() : null
 }
 
-export function Field({ field, value, onChange }: FieldProps) {
-  const datetime = value?.value ? new Date(value.value) : null
-  const dateValue = datetime ? format(datetime, DATE_FORMAT) : ""
-  const timeValue = datetime ? format(datetime, TIME_FORMAT) : ""
+export function Field({ field, value, rawValue, kind = 'update', onChange }: FieldProps) {
+  // Handle internal deserialization if rawValue is provided
+  let processedValue = value;
+  
+  if (rawValue !== undefined) {
+    // Create a controller directly
+    const fieldController = controller({
+      path: field.path,
+      label: field.label,
+      description: field.description,
+      fieldMeta: field.fieldMeta || {}
+    });
+    
+    // Deserialize the raw value and cast to the correct type
+    const deserialized = fieldController.deserialize({ [field.path]: rawValue });
+    processedValue = {
+      value: deserialized.value,
+      initial: deserialized.initial,
+      kind: deserialized.kind as 'update' | 'create'
+    };
+  }
+
+  const [open, setOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    processedValue?.value ? new Date(processedValue.value) : undefined
+  );
+  const [timeValue, setTimeValue] = useState(
+    selectedDate ? format(selectedDate, TIME_FORMAT) : "00:00:00"
+  );
+
+  // Update the date/time when props change
+  useEffect(() => {
+    if (processedValue?.value) {
+      const date = new Date(processedValue.value);
+      setSelectedDate(date);
+      setTimeValue(format(date, TIME_FORMAT));
+    }
+  }, [processedValue?.value]);
+  
+  // Update value when date changes
+  const handleDateChange = (date: Date | undefined) => {
+    if (!date) return;
+    
+    setSelectedDate(date);
+    
+    // Preserve the time when changing date
+    const currentTime = timeValue || "00:00:00";
+    const dateStr = format(date, DATE_FORMAT);
+    const newValue = parseDateTime(dateStr, currentTime);
+    
+    onChange?.({
+      kind: "update",
+      value: newValue,
+      initial: processedValue?.initial,
+    });
+  };
+  
+  // Update value when time changes
+  const handleTimeChange = (time: string) => {
+    setTimeValue(time);
+    
+    if (!selectedDate) {
+      // If no date selected yet, use today's date
+      const today = new Date();
+      setSelectedDate(today);
+      const dateStr = format(today, DATE_FORMAT);
+      const newValue = parseDateTime(dateStr, time);
+      
+      onChange?.({
+        kind: "update",
+        value: newValue,
+        initial: processedValue?.initial,
+      });
+    } else {
+      // Use the existing selected date
+      const dateStr = format(selectedDate, DATE_FORMAT);
+      const newValue = parseDateTime(dateStr, time);
+      
+      onChange?.({
+        kind: "update",
+        value: newValue,
+        initial: processedValue?.initial,
+      });
+    }
+  };
 
   return (
     <div className="grid gap-2">
       <Label>{field.label}</Label>
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <Input
-            type="date"
-            value={dateValue}
-            onChange={(e) => {
-              const newValue = parseDateTime(e.target.value, timeValue)
-              onChange?.({
-                kind: "update",
-                value: newValue,
-                initial: value?.initial,
-              })
-            }}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={`w-full justify-start text-left font-normal ${!processedValue?.value ? 'text-muted-foreground' : ''}`}
+          >
+            <CalendarIcon className="mr-2 h-4 w-4" />
+            {formatDateForDisplay(processedValue?.value)}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={handleDateChange}
+            initialFocus
           />
-        </div>
-        <div className="flex-1">
-          <Input
-            type="time"
-            step="1"
-            value={timeValue}
-            onChange={(e) => {
-              const newValue = parseDateTime(dateValue, e.target.value)
-              onChange?.({
-                kind: "update",
-                value: newValue,
-                initial: value?.initial,
-              })
-            }}
-          />
-        </div>
-      </div>
+          <div className="border-t p-3">
+            <div className="flex items-center gap-3">
+              <Label className="text-xs">
+                Enter time
+              </Label>
+              <div className="relative grow">
+                <Input
+                  type="time"
+                  step="1"
+                  value={timeValue}
+                  onChange={(e) => handleTimeChange(e.target.value)}
+                  className="peer appearance-none ps-9 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
+                />
+                <div className="text-muted-foreground/80 pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 peer-disabled:opacity-50">
+                  <ClockIcon size={16} aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
       {field.description && <p className="text-sm text-muted-foreground">{field.description}</p>}
     </div>
   )
@@ -125,7 +235,7 @@ export function Cell({ item, field }: CellProps) {
 
   return (
     <time dateTime={value} className="text-sm tabular-nums">
-      {formatDate(value)}
+      {formatDateForDisplay(typeof value === 'string' ? value : null)}
     </time>
   )
 }
@@ -196,4 +306,33 @@ export const filter = {
     }
   }
 }
+
+/**
+ * Controller for timestamp fields
+ */
+export const controller = (config: any) => {
+  return {
+    path: config.path,
+    label: config.label,
+    description: config.description,
+    graphqlSelection: config.path,
+    defaultValue: {
+      kind: 'create' as const,
+      value: null,
+    },
+    deserialize: (data: Record<string, any>) => {
+      const value = data[config.path];
+      return {
+        kind: 'update' as const,
+        initial: value,
+        value: value,
+      };
+    },
+    serialize: (value: any) => {
+      return {
+        [config.path]: value.value,
+      };
+    },
+  };
+};
 

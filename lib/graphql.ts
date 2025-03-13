@@ -135,6 +135,48 @@ export async function getKeystoneAdminMeta() {
 }
 
 /**
+ * Fetches the complete admin metadata from Keystone with itemView field
+ * This is a specialized version that includes the itemView field needed by the admin UI
+ */
+export async function getKeystoneAdminMetaWithItemView() {
+  const query = `
+    query {
+      keystone {
+        adminMeta {
+          lists {
+            key
+            path
+            label
+            singular
+            plural
+            description
+            initialColumns
+            pageSize
+            labelField
+            fields {
+              path
+              label
+              isOrderable
+              isFilterable
+              fieldMeta
+              viewsIndex
+              customViewsIndex
+              itemView {
+                fieldMode
+                fieldPosition
+              }
+            }
+          }
+        }
+      }
+    }
+  `
+
+  const data = await fetchGraphQL(query)
+  return data;
+}
+
+/**
  * Gets a specific list's metadata from the admin metadata
  * This is equivalent to what useList(listKey) does in the client
  */

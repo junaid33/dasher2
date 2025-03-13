@@ -4,13 +4,21 @@
 
 "use client"
 
+import React from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 
 interface Field {
   path: string
   label: string
   description?: string
+  fieldMeta?: {
+    isRequired?: boolean;
+    displayMode?: "input" | "textarea";
+    defaultValue?: any;
+    validation?: any;
+  }
 }
 
 interface FilterProps {
@@ -25,8 +33,12 @@ interface CellProps {
 
 interface FieldProps {
   field: Field
-  value?: { value: string; initial?: string; kind: 'update' | 'create' }
-  onChange?: (value: { value: string; initial?: string; kind: 'update' | 'create' }) => void
+  value?: Value
+  rawValue?: any
+  kind?: 'create' | 'update'
+  disabled?: boolean
+  autoFocus?: boolean
+  forceValidation?: boolean
 }
 
 interface FilterLabelProps {
@@ -37,6 +49,7 @@ interface FilterLabelProps {
 
 interface GraphQLProps {
   path: string
+  type: keyof FilterTypes
   value: string
 }
 
@@ -55,6 +68,10 @@ interface FilterTypes {
   ends_with_i: FilterType
   not_ends_with_i: FilterType
 }
+
+type Value =
+  | { value: string | null; kind: 'create' }
+  | { value: string | null; initial: string | null; kind: 'update' }
 
 // Filter component for text fields
 export function Filter({ value, onChange }: FilterProps) {
@@ -117,25 +134,60 @@ export function Cell({ item, field }: CellProps) {
   )
 }
 
-export function Field({ field, value, onChange }: FieldProps) {
+export function Field({ field, rawValue, kind = 'update', disabled, autoFocus, forceValidation, onChange }: FieldProps) {
+  const [isDirty, setDirty] = React.useState(false);
+  const currentValue = rawValue ?? "";
+  const isInvalid = !validate(
+    kind === 'update' 
+      ? { kind: 'update', value: currentValue, initial: currentValue }
+      : { kind: 'create', value: currentValue },
+    field.fieldMeta?.isRequired || false
+  );
+  const errorMessage = isInvalid && (isDirty || forceValidation) ? `${field.label} is required.` : undefined;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setDirty(true);
+  };
+
+  const fieldElement = field.fieldMeta?.displayMode === "textarea" ? (
+    <Textarea
+      id={field.path}
+      name={field.path}
+      defaultValue={currentValue}
+      onChange={onChange}
+      autoFocus={autoFocus}
+      disabled={disabled}
+      placeholder="Enter text..."
+      required={field.fieldMeta?.isRequired}
+    />
+  ) : (
+    <Input
+      id={field.path}
+      name={field.path}
+      type="text"
+      defaultValue={currentValue}
+      onChange={onChange}
+      autoFocus={autoFocus}
+      disabled={disabled}
+      placeholder="Enter text..."
+      required={field.fieldMeta?.isRequired}
+    />
+  );
+
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={field.path}>{field.label}</Label>
-      <Input
-        id={field.path}
-        type="text"
-        value={value?.value || ""}
-        onChange={(e) =>
-          onChange?.({
-            kind: "update",
-            value: e.target.value,
-            initial: value?.initial,
-          })
-        }
-      />
-      {field.description && <p className="text-sm text-muted-foreground">{field.description}</p>}
+    <div className="space-y-2">
+      <Label htmlFor={field.path} className={errorMessage ? "text-destructive" : ""}>
+        {field.label}
+        {field.fieldMeta?.isRequired && <span className="text-destructive ml-1">*</span>}
+      </Label>
+      {fieldElement}
+      {errorMessage ? (
+        <p className="text-sm text-destructive">{errorMessage}</p>
+      ) : field.description ? (
+        <p className="text-sm text-muted-foreground">{field.description}</p>
+      ) : null}
     </div>
-  )
+  );
 }
 
 // Filter controller for text fields
@@ -146,26 +198,73 @@ export const filter = {
     return `${label.toLowerCase()}: "${value}"`;
   },
   graphql: ({ path, type, value }: GraphQLProps) => {
+    const mode = "insensitive";
     switch (type) {
-      case 'contains_i':
-        return { [path]: { contains: value, mode: 'insensitive' } }
-      case 'not_contains_i':
-        return { [path]: { not: { contains: value }, mode: 'insensitive' } }
-      case 'equals_i':
-        return { [path]: { equals: value, mode: 'insensitive' } }
-      case 'not_equals_i':
-        return { [path]: { not: { equals: value }, mode: 'insensitive' } }
-      case 'starts_with_i':
-        return { [path]: { startsWith: value, mode: 'insensitive' } }
-      case 'not_starts_with_i':
-        return { [path]: { not: { startsWith: value }, mode: 'insensitive' } }
-      case 'ends_with_i':
-        return { [path]: { endsWith: value, mode: 'insensitive' } }
-      case 'not_ends_with_i':
-        return { [path]: { not: { endsWith: value }, mode: 'insensitive' } }
-      default:
-        return {}
+      case "contains_i": return { [path]: { contains: value, mode } };
+      case "not_contains_i": return { [path]: { not: { contains: value }, mode } };
+      case "equals_i": return { [path]: { equals: value, mode } };
+      case "not_equals_i": return { [path]: { not: { equals: value }, mode } };
+      case "starts_with_i": return { [path]: { startsWith: value, mode } };
+      case "not_starts_with_i": return { [path]: { not: { startsWith: value }, mode } };
+      case "ends_with_i": return { [path]: { endsWith: value, mode } };
+      case "not_ends_with_i": return { [path]: { not: { endsWith: value }, mode } };
+      default: return {};
     }
   }
 }
+
+/**
+ * Validate a text field value
+ */
+function validate(value: Value | undefined, isRequired: boolean) {
+  if (!isRequired) return true;
+  if (!value) return false;
+  
+  // If this is an update and the initial value was null, we want to allow saving
+  // since the user probably doesn't have read access control
+  if (value.kind === 'update' && value.initial === null) return true;
+  
+  return value.value !== null && value.value !== '';
+}
+
+/**
+ * Controller for text fields
+ */
+export const controller = (config: any) => {
+  const validation = {
+    isRequired: config.fieldMeta?.validation?.isRequired || false,
+    length: config.fieldMeta?.validation?.length || { min: null, max: null },
+    match: config.fieldMeta?.validation?.match ? {
+      regex: new RegExp(config.fieldMeta.validation.match.regex.source, config.fieldMeta.validation.match.regex.flags),
+      explanation: config.fieldMeta.validation.match.explanation,
+    } : null,
+  };
+  
+  return {
+    path: config.path,
+    label: config.label,
+    description: config.description,
+    graphqlSelection: config.path,
+    defaultValue: {
+      kind: "create",
+      value: config.fieldMeta?.defaultValue || "",
+    },
+    displayMode: config.fieldMeta?.displayMode || "input",
+    isRequired: validation.isRequired,
+    deserialize: (data: Record<string, any>) => {
+      const value = data[config.path];
+      
+      return { 
+        kind: "update", 
+        initial: value,
+        value: value
+      };
+    },
+    serialize: (value: Value) => ({
+      [config.path]: value.value
+    }),
+    validation,
+    validate: (val: Value) => validate(val, validation.isRequired),
+  };
+};
 

@@ -26,7 +26,6 @@ export function FloatingUIWrapper({
   };
 
   const handleDelete = () => {
-    console.log("Delete items:", Array.from(selectedItems));
     setSelectedItems(new Set());
   };
 
