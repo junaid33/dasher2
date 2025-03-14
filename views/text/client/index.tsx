@@ -39,6 +39,7 @@ interface FieldProps {
   disabled?: boolean
   autoFocus?: boolean
   forceValidation?: boolean
+  onChange?: (value: Value) => void
 }
 
 interface FilterLabelProps {
@@ -147,6 +148,20 @@ export function Field({ field, rawValue, kind = 'update', disabled, autoFocus, f
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setDirty(true);
+    if (onChange) {
+      if (kind === 'update') {
+        onChange({
+          kind: 'update',
+          value: e.target.value,
+          initial: currentValue
+        });
+      } else {
+        onChange({
+          kind: 'create',
+          value: e.target.value
+        });
+      }
+    }
   };
 
   const fieldElement = field.fieldMeta?.displayMode === "textarea" ? (
@@ -154,7 +169,7 @@ export function Field({ field, rawValue, kind = 'update', disabled, autoFocus, f
       id={field.path}
       name={field.path}
       defaultValue={currentValue}
-      onChange={onChange}
+      onChange={handleChange}
       autoFocus={autoFocus}
       disabled={disabled}
       placeholder="Enter text..."
@@ -166,7 +181,7 @@ export function Field({ field, rawValue, kind = 'update', disabled, autoFocus, f
       name={field.path}
       type="text"
       defaultValue={currentValue}
-      onChange={onChange}
+      onChange={handleChange}
       autoFocus={autoFocus}
       disabled={disabled}
       placeholder="Enter text..."

@@ -1,96 +1,338 @@
-<cursor-tools Integration>
-# Instructions
-Use the following commands to get AI assistance. Note: All commands should be prefixed with `npx` for proper execution.
+# .cursorrules
 
-**Web Search:**
-`cursor-tools web "<your question>"` - Get answers from the web using Perplexity AI (e.g., `cursor-tools web "latest weather in London"`)
-when using web for complex queries suggest writing the output to a file somewhere like local-research/<query summary>.md.
+You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, and Tailwind. You understand and work with a registry-based view system for managing different field types and their implementations.
 
-**Repository Context:**
-`cursor-tools repo "<your question>"` - Get context-aware answers about this repository using Google Gemini (e.g., `cursor-tools repo "explain authentication flow"`)
+## Code Style and Structure
 
-**Documentation Generation:**
-`cursor-tools doc [options]` - Generate comprehensive documentation for this repository (e.g., `cursor-tools doc --output docs.md`)
-when using doc for remote repos suggest writing the output to a file somewhere like local-docs/<repo-name>.md.
+- Write concise, technical TypeScript code with accurate examples
+- Use functional and declarative programming patterns; avoid classes
+- Prefer iteration and modularization over code duplication
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError)
+- Structure files: exported component, subcomponents, helpers, static content, types
 
-**GitHub Information:**
-`cursor-tools github pr [number]` - Get the last 10 PRs, or a specific PR by number (e.g., `cursor-tools github pr 123`)
-`cursor-tools github issue [number]` - Get the last 10 issues, or a specific issue by number (e.g., `cursor-tools github issue 456`)
+## File Structure Conventions
 
-**Browser Automation (Stateless):**
-`cursor-tools browser open <url> [options]` - Open a URL and capture page content, console logs, and network activity (e.g., `cursor-tools browser open "https://example.com" --html`)
-`cursor-tools browser act "<instruction>" --url=<url> [options]` - Execute actions on a webpage using natural language instructions (e.g., `cursor-tools browser act "Click Login" --url=https://example.com`)
-`cursor-tools browser observe "<instruction>" --url=<url> [options]` - Observe interactive elements on a webpage and suggest possible actions (e.g., `cursor-tools browser observe "interactive elements" --url=https://example.com`)
-`cursor-tools browser extract "<instruction>" --url=<url> [options]` - Extract data from a webpage based on natural language instructions (e.g., `cursor-tools browser extract "product names" --url=https://example.com/products`)
+### Views Directory (`views/`)
+- Each field type has its own directory (e.g., `text`, `select`, `integer`)
+- Client implementation in `client/index.tsx`
+- Server implementation in `server/index.ts`
+- Follow consistent implementation patterns for each field type
 
-**Notes on Browser Commands:**
-- All browser commands are stateless: each command starts with a fresh browser instance and closes it when done.
-- When using `--connect-to`, special URL values are supported:
-  - `current`: Use the existing page without reloading
-  - `reload-current`: Use the existing page and refresh it (useful in development)
-- Multi step workflows involving state or combining multiple actions are supported in the `act` command using the pipe (|) separator (e.g., `cursor-tools browser act "Click Login | Type 'user@example.com' into email | Click Submit" --url=https://example.com`)
-- Video recording is available for all browser commands using the `--video=<directory>` option. This will save a video of the entire browser interaction at 1280x720 resolution. The video file will be saved in the specified directory with a timestamp.
-- DO NOT ask browser act to "wait" for anything, the wait command is currently disabled in Stagehand.
+### Registry System
+- Central registry in `views/registry.ts`
+- Maps field types to their implementations
+- Provides utility functions:
+  - `getClientField`: Get client-side implementation
+  - `getServerField`: Get server-side implementation
+  - `getFieldTypeFromViewsIndex`: Get field type from viewsIndex
 
-**Builder Mode:**
-When enabled, Builder Mode enforces strict frontend validation rules:
-- REQUIRED: `--connect-to=9222` for continuous browser connection
-- REQUIRED: `reload-current` for page state verification
-- REQUIRED: `--console` flag for error detection
-- NO EXCEPTIONS: You need to always check the webpage before stopping verifyig the page is loading with no errors
-- CYCLE (ALL STEPS MANDATORY):
-  1. Execute requested changes
-  2. Reload page and verify changes
-  3. Check console for JavaScript errors
-  4. Validate HTML structure
-  5. Verify URL routing
-  6. Only complete when ALL checks pass
-- Examples:
-  - Page validation: `npx cursor-tools browser open --url=reload-current --connect-to=9222 --console --html`
-  - With actions: `npx cursor-tools browser act "Click Submit" --url=reload-current --connect-to=9222 --console --html`
-- WARNING: Commands will continue running until ALL frontend verifications pass
-- FAILURE TO USE BUILDER MODE may result in undetected frontend errors
+### Field Type Implementation Requirements
+Client (`client/index.tsx`):
+- `Field` component: Form input component
+- `Filter` component: Filter UI component
+- `Cell` component: List view cell component
+- `controller`: Field-specific logic and validation
 
-**Tool Recommendations:**
-- `cursor-tools web` is best for general web information not specific to the repository.
-- `cursor-tools repo` is ideal for repository-specific questions, planning, code review and debugging.
-- `cursor-tools doc` generates documentation for local or remote repositories.
-- `cursor-tools browser` is useful for testing and debugging web apps.
+Server (`server/index.ts`):
+- `getGraphQLSelection`: Define GraphQL query selection
+- `transformFilter`: Convert filter params to GraphQL
+- `getFilterTypes`: Define available filter types
+- `formatFilterLabel`: Format filter display labels
 
-**Running Commands:**
-1. **Installed version:** Use `cursor-tools <command>` (if in PATH) or `npm exec cursor-tools "<command>"`, `yarn cursor-tools "<command>"`, `pnpm cursor-tools "<command>"`.
-2. **Without installation:** Use `npx -y cursor-tools@latest "<command>"` or `bunx -y cursor-tools@latest "<command>"`.
+## Component Patterns
 
-**General Command Options (Supported by all commands):**
---model=<model name>: Specify an alternative AI model to use
---max-tokens=<number>: Control response length
---save-to=<file path>: Save command output to a file (in *addition* to displaying it)
---help: View all available options (help is not fully implemented yet)
+### Item Pages
+- Use `ItemPageClient.tsx` for client-side logic
+- Implement form handling with React Hook Form
+- Use `ItemFormFields.tsx` for rendering form fields
+- Handle field changes through onChange callbacks
+- Implement proper validation and error handling
 
-**Documentation Command Options:**
---from-github=<GitHub username>/<repository name>[@<branch>]: Generate documentation for a remote GitHub repository
+### List Views
+- Use `ListTable.tsx` for displaying data
+- Implement filtering and sorting with URL parameters
+- Use `FilterBar.tsx` for filter controls
+- Handle pagination with cursor-based approach
 
-**GitHub Command Options:**
---from-github=<GitHub username>/<repository name>[@<branch>]: Access PRs/issues from a specific GitHub repository
+### Field Components
+- Implement consistent interfaces across field types
+- Use Shadcn UI components for base UI elements
+- Handle validation through field controllers
+- Support filtering capabilities where appropriate
 
-**Browser Command Options (for 'open', 'act', 'observe', 'extract'):**
---console: Capture browser console logs (enabled by default, use --no-console to disable)
---html: Capture page HTML content
---network: Capture network activity (enabled by default, use --no-network to disable)
---screenshot=<file path>: Save a screenshot of the page
---timeout=<milliseconds>: Set navigation timeout (default: 30000ms)
---viewport=<width>x<height>: Set viewport size (e.g., 1280x720). When using --connect-to, viewport is only changed if this option is explicitly provided
---headless: Run browser in headless mode (default: true)
---no-headless: Show browser UI (non-headless mode) for debugging
---connect-to=<port>: Connect to existing Chrome instance
---wait=<duration or selector>: Wait after page load (e.g., '5s', '#element-id', 'selector:.my-class')
---video=<directory>: Save a video recording of the browser interaction to the specified directory (1280x720 resolution). Not available when using --connect-to
+## State Management
 
-**Additional Notes:**
-- For detailed information, see `node_modules/cursor-tools/README.md` (if installed locally).
-- Configuration is in `cursor-tools.config.json` (or `~/.cursor-tools/config.json`).
-- API keys are loaded from `.cursor-tools.env` (or `~/.cursor-tools/.env`).
-- Browser commands require separate installation of Playwright: `npm install --save-dev playwright` or `npm install -g playwright`.
-- **Remember:** You're part of a team of superhuman expert AIs. Work together to solve complex problems.
-<!-- cursor-tools-version: 0.5.0 -->
-</cursor-tools Integration>
+- Use React's useState for component-level state
+- Use Context API for shared state across components
+- Use URL parameters for list state (filters, sorting)
+- Implement proper form state management
+- Handle loading and error states consistently
+
+## Data Flow
+
+- Use GraphQL for data fetching and mutations
+- Implement proper data serialization/deserialization
+- Use proper type definitions for all data structures
+- Handle loading and error states appropriately
+- Implement proper caching where needed
+
+## TypeScript Usage
+
+- Use TypeScript for all code
+- Define proper interfaces for components and data
+- Use proper type definitions for all functions
+- Implement proper error handling with types
+- Use proper type guards where needed
+
+## UI and Styling
+
+- Use Shadcn UI components consistently
+- Implement responsive design with Tailwind
+- Follow mobile-first approach
+- Use proper accessibility attributes
+- Implement proper loading states and transitions
+
+## Best Practices
+
+- Follow React Server Component patterns
+- Minimize client-side JavaScript
+- Implement proper error boundaries
+- Use proper TypeScript practices
+- Follow proper accessibility guidelines
+- Implement proper testing practices
+
+## Field Type Development Guidelines
+
+When implementing a new field type:
+
+1. Create appropriate directories:
+   ```
+   views/
+     your-field-type/
+       client/
+         index.tsx
+       server/
+         index.ts
+   ```
+
+2. Implement required components in `client/index.tsx`:
+   ```typescript
+   export function Field({ field, value, onChange }) {
+     // Implementation
+   }
+
+   export function Filter({ value, onChange, operator }) {
+     // Implementation
+   }
+
+   export function Cell({ item, field }) {
+     // Implementation
+   }
+
+   export const controller = (field) => ({
+     path: field.path,
+     label: field.label,
+     graphqlSelection: field.path,
+     deserialize: (value) => ({ kind: 'value', value }),
+     serialize: (value) => ({ [field.path]: value }),
+     validate: (value) => true
+   });
+   ```
+
+3. Implement required functions in `server/index.ts`:
+   ```typescript
+   export function getGraphQLSelection(path) {
+     return path;
+   }
+
+   export function transformFilter(path, operator, value) {
+     // Implementation
+   }
+
+   export function getFilterTypes() {
+     // Implementation
+   }
+
+   export function formatFilterLabel(operator, value) {
+     // Implementation
+   }
+   ```
+
+4. Register the field type in `views/registry.ts`:
+   ```typescript
+   import * as yourFieldClient from "./your-field-type/client"
+   import * as yourFieldServer from "./your-field-type/server"
+
+   export const fieldTypes = {
+     // ... existing types ...
+     'your-field-type': {
+       client: yourFieldClient,
+       server: yourFieldServer,
+     },
+   }
+   ```
+
+## Error Handling
+
+- Implement proper error boundaries
+- Handle GraphQL errors appropriately
+- Implement proper form validation
+- Show appropriate error messages
+- Log errors properly
+
+## Performance
+
+- Minimize client-side JavaScript
+- Implement proper caching
+- Use proper code splitting
+- Optimize images and assets
+- Monitor and optimize performance metrics
+
+## Testing
+
+- Write proper unit tests
+- Implement integration tests
+- Test error handling
+- Test edge cases
+- Implement proper CI/CD
+
+## Data Transformation and Field Implementation
+
+### Serialization/Deserialization System
+
+The system uses a registry-based approach where each field type handles its own data transformation between API and UI formats.
+
+#### Deserialization (API to UI)
+- Occurs when data is fetched from the API
+- Transforms raw API data into UI-friendly format
+- Uses `deserializeValue` utility function which:
+  - Gets field implementation using `getFieldTypeFromViewsIndex` and `getClientField`
+  - Calls field-specific `controller.deserialize` method if available
+  - Returns `DeserializedValue` object with format:
+    ```typescript
+    type DeserializedValue = Record<string, {
+      kind: 'value';
+      value: any;
+    } | {
+      kind: 'error';
+      errors: any[];
+    }>;
+    ```
+
+#### Serialization (UI to API)
+- Occurs when saving form data back to API
+- Transforms UI form values into API-compatible format
+- Uses `serializeValue` utility function which:
+  - Gets field implementation using `getFieldTypeFromViewsIndex` and `getClientField`
+  - Calls field-specific `controller.serialize` method if available
+  - Returns plain object ready for API submission
+
+### Field Type Implementation Details
+
+When implementing a new field type, ensure proper data handling:
+
+1. Controller Implementation:
+   ```typescript
+   export const controller = (field: Field) => ({
+     path: field.path,
+     label: field.label,
+     graphqlSelection: field.path,
+     deserialize: (data: Record<string, any>) => {
+       const value = data[field.path];
+       return {
+         kind: 'update' as const,
+         initial: value,
+         value: value,
+       };
+     },
+     serialize: (value: Value) => ({
+       [field.path]: value.value
+     }),
+     validate: (value: Value) => {
+       if (!field.fieldMeta?.isRequired) return true;
+       return value?.value != null && value.value !== '';
+     }
+   });
+   ```
+
+2. Field Component Data Flow:
+   ```typescript
+   export function Field({ 
+     field, 
+     value, 
+     onChange, 
+     forceValidation 
+   }: FieldProps) {
+     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+       onChange?.({
+         kind: 'update',
+         value: e.target.value,
+         initial: value?.value
+       });
+     };
+     // Component implementation
+   }
+   ```
+
+3. Data Validation Flow:
+   - Field-level validation through `controller.validate`
+   - Form-level validation through `useInvalidFields` hook
+   - Validation triggered on:
+     - Form submission
+     - Field blur (optional)
+     - When forceValidation is true
+
+4. Error Handling:
+   - Handle API errors in deserialization
+   - Validate data during serialization
+   - Show validation errors in UI
+   - Log transformation errors appropriately
+
+### Data Flow Patterns
+
+1. Field Change Flow:
+   - User interacts with field component
+   - Component calls onChange with new value
+   - Parent form updates state
+   - Validation runs if configured
+   - UI updates to reflect changes
+
+2. Form Submission Flow:
+   - Validate all fields
+   - Serialize form data
+   - Send to API
+   - Handle response:
+     - Success: Update UI state
+     - Error: Show error messages
+
+3. List View Data Flow:
+   - Fetch data with filters/sorting
+   - Deserialize for display
+   - Render in Cell components
+   - Handle pagination/filtering
+
+### Best Practices for Field Types
+
+1. Data Transformation:
+   - Always implement both serialize and deserialize
+   - Handle null/undefined values
+   - Preserve data types
+   - Document transformation logic
+
+2. Validation:
+   - Implement field-specific validation
+   - Handle required fields
+   - Validate data types
+   - Show clear error messages
+
+3. Error Handling:
+   - Catch transformation errors
+   - Provide fallback values
+   - Log errors appropriately
+   - Show user-friendly messages
+
+4. Performance:
+   - Optimize data transformations
+   - Cache computed values
+   - Minimize unnecessary updates
+   - Handle large datasets efficiently

@@ -80,8 +80,8 @@ interface FilterTypes {
 }
 
 type Value =
-  | { value: Option | null; kind: 'create' }
-  | { value: Option | null; initial: Option | null; kind: 'update' }
+  | { value: string | null; kind: 'create' }
+  | { value: string | null; initial: string | null; kind: 'update' }
 
 // Filter component for select fields
 export function Filter({ value, onChange, operator, field }: FilterProps) {
@@ -192,19 +192,12 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
       // Deserialize the raw value and ensure it has the correct type
       const deserialized = fieldController.deserialize({ [field.path]: rawValue });
       
-      // Make sure it conforms to the Value type
-      if (deserialized.kind === 'update') {
-        return {
-          kind: 'update' as const,
-          initial: deserialized.initial,
-          value: deserialized.value
-        };
-      } else {
-        return {
-          kind: 'create' as const,
-          value: deserialized.value
-        };
-      }
+      // Ensure it matches our Value type
+      return {
+        kind: 'update' as const,
+        initial: deserialized.value,
+        value: deserialized.value
+      };
     }
     
     // If regular value is provided, use it directly
@@ -212,9 +205,7 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
   }, [field, rawValue, value]);
 
   const [isDirty, setDirty] = useState(false);
-  const [preNullValue, setPreNullValue] = useState<Option | null>(
-    processedValue?.value || (processedValue?.kind === 'update' ? processedValue?.initial : null)
-  );
+  const [preNullValue, setPreNullValue] = useState<string | null>(processedValue?.value || null);
   
   // Get options from fieldMeta instead of relying on field.options
   const options = useMemo(() => {
@@ -226,11 +217,10 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
       label: option.label,
       value: option.value.toString()
     }));
-    
-    // Fallback to field.options if available
-  }, [field.fieldMeta?.options, field.options]);
+  }, [field.fieldMeta?.options]);
   
-  const selectedKey = processedValue?.value === null ? null : processedValue?.value?.value || null;
+  // Get the selected key
+  const selectedKey = processedValue?.value || '';
   
   const isNullable = !field.isRequired;
   const isNull = isNullable && processedValue?.value === null;
@@ -239,22 +229,20 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
   const errorMessage = isInvalid && (isDirty || forceValidation) 
     ? `${field.label} is required.` 
     : undefined;
-  
+
   const onSelectionChange = (key: string) => {
     if (!onChange) return;
-    
-    const newValue = options.find(opt => opt.value === key) || null;
     
     if (processedValue?.kind === 'update') {
       onChange({
         kind: 'update',
         initial: processedValue.initial,
-        value: newValue
+        value: key
       });
     } else {
       onChange({
         kind: 'create',
-        value: newValue
+        value: key
       });
     }
     
@@ -284,12 +272,12 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
         onChange({
           kind: 'update',
           initial: processedValue.initial,
-          value: preNullValue || options[0] || null
+          value: preNullValue || options[0]?.value || null
         });
       } else {
         onChange({
           kind: 'create',
-          value: preNullValue || options[0] || null
+          value: preNullValue || options[0]?.value || null
         });
       }
     }
@@ -336,7 +324,6 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
         );
       
       case 'segmented-control':
-        // Simplified segmented control using radio group with horizontal layout
         return (
           <div className="space-y-2">
             <div className="flex justify-between">
@@ -384,7 +371,6 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
         );
       
       default:
-        // Default select dropdown
         return (
           <div className="space-y-2">
             <div className="flex justify-between">
@@ -399,7 +385,7 @@ export function Field({ field, value, rawValue, kind = 'update', onChange, autoF
               </Label>
             </div>
             <Select
-              value={selectedKey !== null ? selectedKey : ""}
+              value={selectedKey || ""}
               onValueChange={onSelectionChange}
               disabled={isNull}
             >
@@ -515,7 +501,7 @@ export const controller = (config: any) => {
     options: optionsWithStringValues,
     defaultValue: {
       kind: 'create',
-      value: optionsWithStringValues.find((opt: Option) => opt.value === stringifiedDefault) || null,
+      value: stringifiedDefault || null,
     },
     displayMode: config.fieldMeta?.displayMode || 'select',
     type: config.fieldMeta?.type || 'string',
@@ -528,40 +514,21 @@ export const controller = (config: any) => {
         return { kind: 'update', initial: null, value: null };
       }
       
-      // Convert value to string for comparison
+      // Convert value to string
       const valueStr = value.toString();
       
-      // Find matching option
-      for (const option of optionsWithStringValues) {
-        if (option.value === valueStr) {
-          return {
-            kind: 'update',
-            initial: option,
-            value: option,
-          };
-        }
-      }
-      
-      // If no match found but we have a value, create a synthetic option
-      // This can happen if the option list changed or data is inconsistent
-      if (value !== null && value !== undefined) {
-        const syntheticOption = {
-          label: String(value),
-          value: valueStr
-        };
-        
-        return { 
-          kind: 'update', 
-          initial: syntheticOption,
-          value: syntheticOption 
-        };
-      }
-      
-      return { kind: 'update', initial: null, value: null };
+      return {
+        kind: 'update',
+        initial: valueStr,
+        value: valueStr,
+      };
     },
-    serialize: (value: Value) => ({
-      [config.path]: t(value.value?.value || null),
-    }),
+    serialize: (value: Value) => {
+      // Just return the raw value string, transformed if needed
+      return {
+        [config.path]: t(value.value)
+      };
+    },
     validate: (value: Value) => validate(value, config.fieldMeta?.isRequired || false),
   };
 };
